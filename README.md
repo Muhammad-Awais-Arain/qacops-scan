@@ -34,7 +34,28 @@ To scan a site running on your own machine, start the server with `ALLOW_PRIVATE
 | `server/robots.js` | Honours robots.txt |
 | `src/pages/` | Home form, live scan terminal, report page |
 
-Leads (email, URL, scan id) are appended to `data/leads.jsonl`.
+Leads (email, URL, scan id) are appended to `data/leads.jsonl`. Audit requests from the qacops.com form are appended to `data/contacts.jsonl`, so nothing is lost even if an email fails.
+
+## Email
+
+The server sends four emails through any SMTP provider (see `.env.example`):
+
+| When | To | What |
+|---|---|---|
+| A scan finishes | Visitor | Verdict and report link |
+| A scan finishes | `OWNER_EMAIL` | Who scanned what, with reply to set to the visitor |
+| Audit form sent on qacops.com | `OWNER_EMAIL` | The request, with reply to set to the visitor |
+| Audit form sent on qacops.com | Visitor | Confirmation that a person will reply |
+
+Without `SMTP_HOST`, emails are printed to the console, which is handy for local work.
+
+## Report cleanup
+
+Reports and screenshots older than `REPORT_TTL_DAYS` (30) are deleted on startup and every 6 hours. The report page and the email both tell visitors when their link stops working.
+
+## Audit form endpoint
+
+`POST /api/contact` takes `{ name, company, email, link, pain }` from the qacops.com audit form. Only origins listed in `CONTACT_ORIGINS` get CORS access, there's a hidden honeypot field, and it's limited to 5 requests per IP per hour.
 
 ## Safety
 
@@ -55,6 +76,12 @@ Leads (email, URL, scan id) are appended to `data/leads.jsonl`.
 | `SCANS_PER_HOUR` | `3` |
 | `MAX_QUEUE` | `20` |
 | `AUDIT_URL` | `https://qacops.com/#audit` |
+| `REPORT_TTL_DAYS` | `30` |
+| `PUBLIC_URL` | `http://127.0.0.1:3001` (set to `https://scan.qacops.com` in production) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | empty (emails printed to console) |
+| `MAIL_FROM` | `QACops <scan@qacops.com>` |
+| `OWNER_EMAIL` | `agha@qacops.com` |
+| `CONTACT_ORIGINS` | `https://qacops.com,https://www.qacops.com` |
 
 ## Deploying (outline)
 

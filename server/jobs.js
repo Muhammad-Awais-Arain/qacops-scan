@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config.js";
+import { notifyOwnerOfScan, sendReportReady } from "./mailer.js";
 import { runScan } from "./scanner.js";
 
 const jobs = new Map();
@@ -19,11 +20,16 @@ export function getJob(id) {
   return jobs.get(id);
 }
 
-export function createJob(target) {
+export function activeJobIds() {
+  return new Set(jobs.keys());
+}
+
+export function createJob(target, { email } = {}) {
   const id = crypto.randomBytes(12).toString("base64url");
   const job = {
     id,
     target,
+    email,
     status: "queued",
     events: [],
     listeners: new Set(),
@@ -73,6 +79,10 @@ async function run(job) {
     await fs.writeFile(path.join(dir, "report.json"), JSON.stringify(report));
     job.status = "done";
     job.emit("done", "complete", { id: job.id });
+    if (job.email) {
+      sendReportReady({ to: job.email, report });
+      notifyOwnerOfScan({ email: job.email, report });
+    }
   } catch (err) {
     console.error(`[scan ${job.id}]`, err);
     job.status = "failed";

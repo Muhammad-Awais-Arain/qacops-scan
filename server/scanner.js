@@ -508,6 +508,7 @@ function buildReport(d) {
     scannedAt: new Date(d.started).toISOString(),
     durationMs: Date.now() - d.started,
     auditUrl: config.auditUrl,
+    retentionDays: config.reportTtlDays,
     limits: { maxPages: config.maxPages, hitPageCap: d.hitPageCap, hitTimeCap: d.hitTimeCap },
     robots: { found: d.robots.found, skipped: d.robotsSkipped },
     screenshots: d.screenshots,

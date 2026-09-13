@@ -128,6 +128,8 @@ export default function Report({ id }) {
               {report.limits.hitPageCap && ` Stopped at the ${report.limits.maxPages} page limit.`}
               {report.limits.hitTimeCap && " Stopped at the time limit."}
               {report.robots.skipped > 0 && ` ${report.robots.skipped} pages skipped because robots.txt asked.`}
+              {report.retentionDays &&
+                ` This link works until ${new Date(new Date(report.scannedAt).getTime() + report.retentionDays * 86400000).toLocaleDateString(undefined, { dateStyle: "long" })}.`}
             </p>
             <p className="r-verdict">{verdict}</p>
 

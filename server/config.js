@@ -28,4 +28,28 @@ export const config = {
 
   userAgent: "Mozilla/5.0 (compatible; QACopsScan/1.0; +https://qacops.com/scan)",
   auditUrl: process.env.AUDIT_URL || "https://qacops.com/#audit",
+
+  // Reports and their screenshots are deleted after this many days.
+  reportTtlDays: num("REPORT_TTL_DAYS", 30),
+
+  // Public address of this app, used to build report links in emails.
+  publicUrl: (process.env.PUBLIC_URL || "http://127.0.0.1:3001").replace(/\/$/, ""),
+
+  // Email. Any SMTP provider works (Brevo, Resend, Gmail app password, ...).
+  // Without SMTP_HOST, emails are printed to the console instead of sent.
+  smtp: {
+    host: process.env.SMTP_HOST || "",
+    port: num("SMTP_PORT", 587),
+    user: process.env.SMTP_USER || "",
+    pass: process.env.SMTP_PASS || "",
+  },
+  mailFrom: process.env.MAIL_FROM || "QACops <scan@qacops.com>",
+  ownerEmail: process.env.OWNER_EMAIL || "agha@qacops.com",
+
+  // Sites allowed to post the audit request form to /api/contact.
+  contactOrigins: (process.env.CONTACT_ORIGINS || "https://qacops.com,https://www.qacops.com")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  contactsPerHourPerIp: num("CONTACTS_PER_HOUR", 5),
 };
