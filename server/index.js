@@ -1,0 +1,108 @@
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import express from "express";
+import { config } from "./config.js";
+import { createJob, getJob, ID_PATTERN, queueLength, reportDir } from "./jobs.js";
+import { UnsafeTargetError, validateTarget } from "./safety.js";
+
+const app = express();
+app.disable("x-powered-by");
+// Caddy or nginx on the same machine sets X-Forwarded-For.
+app.set("trust proxy", "loopback");
+app.use(express.json({ limit: "10kb" }));
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const hits = new Map();
+
+function rateLimited(ip) {
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  const recent = (hits.get(ip) || []).filter((t) => t > hourAgo);
+  if (recent.length >= config.scansPerHourPerIp) return true;
+  recent.push(Date.now());
+  hits.set(ip, recent);
+  return false;
+}
+
+app.post("/api/scans", async (req, res) => {
+  const { url, email, consent } = req.body || {};
+  if (!EMAIL.test(String(email || ""))) return res.status(400).json({ error: "Enter a work email so we can send you the report link." });
+  if (consent !== true) return res.status(400).json({ error: "Confirm you're allowed to scan this site." });
+  if (queueLength() >= config.maxQueue) return res.status(503).json({ error: "The scanner is busy right now. Try again in a few minutes." });
+
+  let target;
+  try {
+    target = await validateTarget(url);
+  } catch (err) {
+    const message = err instanceof UnsafeTargetError ? err.message : "That address can't be scanned.";
+    return res.status(400).json({ error: message });
+  }
+  if (rateLimited(req.ip)) {
+    return res.status(429).json({ error: `You've run ${config.scansPerHourPerIp} scans in the last hour. Try again later, or ask us for a full audit.` });
+  }
+
+  const job = createJob(target);
+  await fsp.mkdir(config.dataDir, { recursive: true });
+  await fsp.appendFile(
+    path.join(config.dataDir, "leads.jsonl"),
+    JSON.stringify({ at: new Date().toISOString(), email: String(email).trim(), url: target.toString(), scanId: job.id, ip: req.ip }) + "\n"
+  );
+  res.status(202).json({ id: job.id });
+});
+
+app.get("/api/scans/:id/events", (req, res) => {
+  const { id } = req.params;
+  if (!ID_PATTERN.test(id)) return res.status(404).end();
+  const job = getJob(id);
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+  res.flushHeaders();
+  const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+  if (!job) {
+    const exists = fs.existsSync(path.join(reportDir(id), "report.json"));
+    send(exists ? { kind: "done", id } : { kind: "failed", text: "We couldn't find that scan. It may have expired." });
+    return res.end();
+  }
+  job.events.forEach(send);
+  if (job.status === "done" || job.status === "failed") return res.end();
+
+  const listener = (event) => {
+    send(event);
+    if (event.kind === "done" || event.kind === "failed") res.end();
+  };
+  job.listeners.add(listener);
+  const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
+  req.on("close", () => {
+    clearInterval(ping);
+    job.listeners.delete(listener);
+  });
+});
+
+app.get("/api/reports/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!ID_PATTERN.test(id)) return res.status(404).json({ error: "Report not found" });
+  try {
+    const raw = await fsp.readFile(path.join(reportDir(id), "report.json"), "utf8");
+    res.type("json").send(raw);
+  } catch {
+    res.status(404).json({ error: "Report not found" });
+  }
+});
+
+app.get("/api/reports/:id/shots/:name", (req, res) => {
+  const { id, name } = req.params;
+  if (!ID_PATTERN.test(id) || !/^[a-z0-9-]+\.jpg$/.test(name)) return res.status(404).end();
+  res.sendFile(path.join(reportDir(id), name), { maxAge: "7d" }, (err) => err && res.status(404).end());
+});
+
+app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
+
+if (fs.existsSync(config.distDir)) {
+  app.use(express.static(config.distDir, { maxAge: "1h", index: false }));
+  app.get("*", (_req, res) => res.sendFile(path.join(config.distDir, "index.html")));
+}
+
+app.listen(config.port, "127.0.0.1", () => {
+  console.log(`QACops Scan listening on http://127.0.0.1:${config.port}`);
+  if (config.allowPrivate) console.warn("ALLOW_PRIVATE_TARGETS is on. Never run this way in production.");
+});
