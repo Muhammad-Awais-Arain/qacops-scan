@@ -130,11 +130,47 @@ app.get("/api/reports/:id/shots/:name", (req, res) => {
   res.sendFile(path.join(reportDir(id), name), { maxAge: "7d" }, (err) => err && res.status(404).end());
 });
 
+// Search engines: the home page is fair game, scan and report pages are not
+// (they hold other people's site data), so say so in the header as well as in
+// the page itself, which is what crawlers that don't run JavaScript will see.
+app.use(["/r", "/scan"], (_req, res, next) => {
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
+
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send(`User-agent: *
+Allow: /$
+Disallow: /r/
+Disallow: /scan/
+Disallow: /api/
+
+Sitemap: ${config.publicUrl}/sitemap.xml
+`);
+});
+
+app.get("/sitemap.xml", (_req, res) => {
+  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${config.publicUrl}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+</urlset>
+`);
+});
+
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
 
 if (fs.existsSync(config.distDir)) {
   app.use(express.static(config.distDir, { maxAge: "1h", index: false }));
-  app.get("*", (_req, res) => res.sendFile(path.join(config.distDir, "index.html")));
+  // A real page, or a send back to the home page. Nothing lands on a dead URL.
+  app.get("*", (req, res) => {
+    if (/^\/(scan|r)\/[A-Za-z0-9_-]{16}$/.test(req.path)) {
+      return res.sendFile(path.join(config.distDir, "index.html"));
+    }
+    if (req.path === "/") return res.sendFile(path.join(config.distDir, "index.html"));
+    // A missing build asset stays a 404: redirecting those would hide a broken deploy.
+    if (req.path.startsWith("/assets/")) return res.status(404).type("text/plain").send("Not found");
+    res.redirect(302, "/");
+  });
 }
 
 app.listen(config.port, config.host, () => {
