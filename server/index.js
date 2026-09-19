@@ -137,8 +137,8 @@ if (fs.existsSync(config.distDir)) {
   app.get("*", (_req, res) => res.sendFile(path.join(config.distDir, "index.html")));
 }
 
-app.listen(config.port, "127.0.0.1", () => {
-  console.log(`QACops Scan listening on http://127.0.0.1:${config.port}`);
+app.listen(config.port, config.host, () => {
+  console.log(`QACops Scan listening on http://${config.host}:${config.port}`);
   console.log(`Email: ${mailStatus()}`);
   console.log(`Reports are kept for ${config.reportTtlDays} days`);
   scheduleCleanup(activeJobIds);

@@ -1,0 +1,20 @@
+services:
+  qacops-scan:
+    build: .
+    image: qacops-scan
+    container_name: qacops-scan
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Inside the container it must listen on all interfaces, otherwise the
+      # published port below cannot reach it.
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATA_DIR: /data
+    ports:
+      - "4005:3001"
+    volumes:
+      # Reports and leads survive rebuilds.
+      - ./data:/data
+    # Chromium needs more shared memory than Docker's 64MB default.
+    shm_size: 1gb

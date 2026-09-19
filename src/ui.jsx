@@ -36,7 +36,7 @@ export function Footer() {
     <footer className="footer">
       <div className="wrap footer-inner">
         <span>QACops Scan is a free tool from <a href={MAIN_SITE}>QACops</a>, the QA crew for teams shipping faster than they can test.</span>
-        <a href="mailto:agha@qacops.com">agha@qacops.com</a>
+        <a href="mailto:contact@qacops.com">contact@qacops.com</a>
       </div>
     </footer>
   );

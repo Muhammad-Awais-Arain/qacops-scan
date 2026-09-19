@@ -7,6 +7,8 @@ const num = (name, fallback) => {
 
 export const config = {
   port: num("PORT", 3001),
+  // Inside Docker this must be 0.0.0.0 so the published port can reach it.
+  host: process.env.HOST || "127.0.0.1",
   dataDir: process.env.DATA_DIR || fileURLToPath(new URL("../data", import.meta.url)),
   distDir: fileURLToPath(new URL("../dist", import.meta.url)),
 
@@ -44,7 +46,7 @@ export const config = {
     pass: process.env.SMTP_PASS || "",
   },
   mailFrom: process.env.MAIL_FROM || "QACops <scan@qacops.com>",
-  ownerEmail: process.env.OWNER_EMAIL || "agha@qacops.com",
+  ownerEmail: process.env.OWNER_EMAIL || "contact@qacops.com",
 
   // Sites allowed to post the audit request form to /api/contact.
   contactOrigins: (process.env.CONTACT_ORIGINS || "https://qacops.com,https://www.qacops.com")

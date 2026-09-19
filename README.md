@@ -69,6 +69,7 @@ Reports and screenshots older than `REPORT_TTL_DAYS` (30) are deleted on startup
 | Variable | Default |
 |---|---|
 | `PORT` | `3001` |
+| `HOST` | `127.0.0.1` (Docker sets `0.0.0.0`) |
 | `DATA_DIR` | `./data` |
 | `MAX_PAGES` | `25` |
 | `MAX_SCAN_MS` | `180000` |
@@ -80,12 +81,33 @@ Reports and screenshots older than `REPORT_TTL_DAYS` (30) are deleted on startup
 | `PUBLIC_URL` | `http://127.0.0.1:3001` (set to `https://scan.qacops.com` in production) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | empty (emails printed to console) |
 | `MAIL_FROM` | `QACops <scan@qacops.com>` |
-| `OWNER_EMAIL` | `agha@qacops.com` |
+| `OWNER_EMAIL` | `contact@qacops.com` |
 | `CONTACT_ORIGINS` | `https://qacops.com,https://www.qacops.com` |
 
-## Deploying (outline)
+## Deploying with Docker
+
+The image is built on Microsoft's Playwright image, so Chromium and its Linux libraries are already inside. Nothing needs installing on the host but Docker.
+
+```bash
+cp .env.example .env     # set PUBLIC_URL, OWNER_EMAIL, SMTP_* and CONTACT_ORIGINS
+docker compose up -d --build
+```
+
+The container listens on `0.0.0.0:3001` inside and is published on host port **4005**. Reports and leads live in `./data`, mounted as a volume, so a rebuild never loses them.
+
+Then point `scan.qacops.com` at `127.0.0.1:4005` in whatever fronts the other sites (Caddy, nginx or a Cloudflare Tunnel).
+
+Useful commands:
+
+```bash
+docker compose logs -f          # includes [mail preview] lines while SMTP is unset
+docker compose up -d --build    # redeploy after a git pull
+docker compose down             # stop
+```
+
+## Deploying without Docker
 
 1. DNS: `A` record `scan` pointing at the server.
 2. On the server: `npm ci && npx playwright install --with-deps chromium && npm run build`.
-3. Keep it running with pm2 or systemd: `node server/index.js` (it listens on 127.0.0.1 only).
+3. Keep it running with pm2 or systemd: `node --env-file=.env server/index.js` (it listens on 127.0.0.1 unless `HOST` says otherwise).
 4. Caddy: `scan.qacops.com { reverse_proxy 127.0.0.1:3001 }`.
