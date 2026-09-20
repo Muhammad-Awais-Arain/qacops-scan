@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Footer, STATUS_LABEL, TopBar, formatBytes, formatMs } from "../ui.jsx";
+import { Check, Footer, Reveal, STATUS_LABEL, TopBar, formatBytes, formatMs } from "../ui.jsx";
 
 const CHECK_META = [
   ["links", "Broken links", "Links on your pages that lead nowhere."],
@@ -28,7 +28,7 @@ function StatusPill({ status }) {
 
 function Section({ id, title, intro, check, children }) {
   return (
-    <section className={`r-section s-${check.status}`} id={id}>
+    <Reveal as="section" className={`r-section s-${check.status}`} id={id}>
       <header className="r-section-head">
         <div>
           <h2>{title}</h2>
@@ -40,7 +40,7 @@ function Section({ id, title, intro, check, children }) {
         </div>
       </header>
       <div className="r-section-body">{children}</div>
-    </section>
+    </Reveal>
   );
 }
 

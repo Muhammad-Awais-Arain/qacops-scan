@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 export const MAIN_SITE = "https://qacops.com";
 
 export function Badge({ size = 26 }) {
@@ -51,3 +53,31 @@ export const formatBytes = (b) => {
 };
 
 export const formatMs = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)}s`);
+
+/* ---------- Motion helpers ---------- */
+
+export function useInView(threshold = 0.18) {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || inView) return;
+    const io = new IntersectionObserver(
+      ([e]) => e.isIntersecting && (setInView(true), io.disconnect()),
+      { threshold }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [threshold, inView]);
+  return [ref, inView];
+}
+
+/** Adds the `in` class the first time it scrolls into view. */
+export function Reveal({ children, className = "", as: Tag = "div", delay = 0, ...rest }) {
+  const [ref, inView] = useInView();
+  return (
+    <Tag ref={ref} className={`reveal ${inView ? "in" : ""} ${className}`.trim()} style={{ "--i": delay }} {...rest}>
+      {children}
+    </Tag>
+  );
+}
