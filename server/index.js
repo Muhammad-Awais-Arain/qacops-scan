@@ -11,7 +11,15 @@ import { UnsafeTargetError, validateTarget } from "./safety.js";
 const app = express();
 app.disable("x-powered-by");
 // Caddy or nginx on the same machine sets X-Forwarded-For.
-app.set("trust proxy", "loopback");
+// Behind Cloudflare and Docker: the request reaches the app from the bridge
+// network, so the private ranges have to be trusted for the forwarded address
+// to survive. TRUST_PROXY can narrow this on other setups.
+app.set("trust proxy", process.env.TRUST_PROXY || "loopback, linklocal, uniquelocal");
+
+// Cloudflare states the visitor's address outright; the forwarded header is the
+// fallback. Without this every visitor shares one address and the per visitor
+// limits below become one shared limit.
+const clientIp = (req) => req.get("cf-connecting-ip") || req.ip || "unknown";
 app.use(express.json({ limit: "10kb" }));
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -49,10 +57,10 @@ app.post("/api/contact", async (req, res) => {
   const form = { name: clean(name, 80), company: clean(company, 80), email: clean(email, 120), link: clean(link, 300), pain: clean(pain, 3000) };
   if (!form.name || !form.company) return res.status(400).json({ error: "Add your name and company so we know who we're talking to." });
   if (!EMAIL.test(form.email)) return res.status(400).json({ error: "Add a work email so we can reply." });
-  if (contactLimited(req.ip)) return res.status(429).json({ error: `Too many requests from this network. Email us directly at ${config.ownerEmail}.` });
+  if (contactLimited(clientIp(req))) return res.status(429).json({ error: `Too many requests from this network. Email us directly at ${config.ownerEmail}.` });
 
   await fsp.mkdir(config.dataDir, { recursive: true });
-  await fsp.appendFile(path.join(config.dataDir, "contacts.jsonl"), JSON.stringify({ at: new Date().toISOString(), ip: req.ip, ...form }) + "\n");
+  await fsp.appendFile(path.join(config.dataDir, "contacts.jsonl"), JSON.stringify({ at: new Date().toISOString(), ip: clientIp(req), ...form }) + "\n");
   const delivered = await sendContact(form);
   // The request is saved either way, so the visitor still gets a success message.
   if (!delivered) console.error("[contact] saved to contacts.jsonl but the email to the owner failed");
@@ -72,7 +80,7 @@ app.post("/api/scans", async (req, res) => {
     const message = err instanceof UnsafeTargetError ? err.message : "That address can't be scanned.";
     return res.status(400).json({ error: message });
   }
-  if (rateLimited(req.ip)) {
+  if (rateLimited(clientIp(req))) {
     return res.status(429).json({ error: `You've run ${config.scansPerHourPerIp} scans in the last hour. Try again later, or ask us for a full audit.` });
   }
 
@@ -80,7 +88,7 @@ app.post("/api/scans", async (req, res) => {
   await fsp.mkdir(config.dataDir, { recursive: true });
   await fsp.appendFile(
     path.join(config.dataDir, "leads.jsonl"),
-    JSON.stringify({ at: new Date().toISOString(), email: String(email).trim(), url: target.toString(), scanId: job.id, ip: req.ip }) + "\n"
+    JSON.stringify({ at: new Date().toISOString(), email: String(email).trim(), url: target.toString(), scanId: job.id, ip: clientIp(req) }) + "\n"
   );
   res.status(202).json({ id: job.id });
 });
