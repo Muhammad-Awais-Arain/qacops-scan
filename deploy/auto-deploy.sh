@@ -59,9 +59,20 @@ for dir in "${REPOS[@]}"; do
 done
 
 if [ "$deployed_any" = "1" ]; then
+  # A freshly recreated container needs a few seconds before it listens, so
+  # retry for up to 30 seconds rather than judging it the instant it starts.
   for port in "${PORTS[@]}"; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$port/" || echo 000)
-    log "health check $port -> $code"
+    code=000
+    for _ in $(seq 1 15); do
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$port/")
+      [ "$code" = "200" ] && break
+      sleep 2
+    done
+    if [ "$code" = "200" ]; then
+      log "health check $port -> 200"
+    else
+      log "health check $port -> ${code:-000} after 30s, SITE MAY BE DOWN"
+    fi
   done
   # Reclaim space from images the rebuilds replaced.
   docker image prune -f --filter "until=168h" >/dev/null 2>&1
