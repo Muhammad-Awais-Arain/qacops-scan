@@ -1,0 +1,13 @@
+[Unit]
+Description=Check for new QACops commits every few minutes
+
+[Timer]
+# First check shortly after boot, then every three minutes.
+OnBootSec=2min
+OnUnitActiveSec=3min
+# Catch up after the machine has been asleep or off.
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Deploy QACops sites when new commits are pushed
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=awais
+WorkingDirectory=/home/awais
+# Runs the installed copy, so updating the repo cannot change the script
+# while it is halfway through running.
+ExecStart=/usr/local/bin/qacops-deploy
+TimeoutStartSec=900
